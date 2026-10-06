@@ -1,14 +1,26 @@
 (() => {
   const $ = (s, el = document) => el.querySelector(s);
+  const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const beijo = new Date(CONFIG.primeiroBeijo);
   const slides = CONFIG.stories;
-  const DURACAO = { texto: 5500, contador: 7000, foto: 6500, carta: 0, final: 0 };
+  const musica = CONFIG.musica;
+  const DURACAO = { texto: 5500, contador: 8000, foto: 6500, top5: 10000, carta: 0, final: 0 };
 
-  document.querySelectorAll(".js-nome").forEach((el) => (el.textContent = CONFIG.nome));
-  if (!CONFIG.musica) $(".lock-foot").textContent = "";
+  const segundosJuntos = () => Math.max(0, Math.floor((Date.now() - beijo.getTime()) / 1000));
+  const diasJuntos = () => Math.floor(segundosJuntos() / 86400);
+  const milhar = (n) => n.toLocaleString("pt-BR");
 
-  const diasJuntos = () => Math.floor((Date.now() - beijo.getTime()) / 86400000);
-  const fmt = (t = "") => t.replace(/\{dias\}/g, diasJuntos()).replace(/\n/g, "<br />");
+  const RABISCO =
+    '<svg viewBox="0 0 200 20" preserveAspectRatio="none" aria-hidden="true"><path d="M3 13 C 40 5, 90 4, 130 9 S 185 15, 197 7" /></svg>';
+  const fmt = (t = "") =>
+    t
+      .replace(/\{dias\}/g, diasJuntos())
+      .replace(/\*(.+?)\*/g, `<span class="mark">$1${RABISCO}</span>`)
+      .replace(/\n/g, "<br />");
+
+  $$(".js-nome").forEach((el) => (el.textContent = CONFIG.nome));
+  $("#lock-titulo").innerHTML = fmt("Antes de abrir,\n") + `<span class="sub">${fmt("quando foi o nosso *primeiro beijo*?")}</span>`;
+  if (!musica?.youtube) $(".lock-foot").textContent = "";
 
   // ---------- entrada ----------
   const input = $("#senha");
@@ -46,7 +58,7 @@
       return;
     }
     input.blur();
-    tocarMusica();
+    carregarYouTube();
     montar();
     $("#stories").hidden = false;
     $("#lock").classList.add("saindo");
@@ -57,66 +69,102 @@
   $("#btn-entrar").addEventListener("click", entrar);
   input.addEventListener("keydown", (e) => e.key === "Enter" && entrar());
 
-  function tocarMusica() {
-    if (!CONFIG.musica) return;
-    const audio = new Audio(CONFIG.musica);
-    audio.loop = true;
-    audio.volume = 0.6;
-    audio.play().catch(() => {});
-  }
-
   // ---------- montagem dos stories ----------
-  const fotos = slides.filter((s) => s.tipo === "foto").map((s) => s.src);
   let slideEls = [];
   let barEls = [];
+
+  const ICONE_PLAY = '<svg class="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z" fill="currentColor"/></svg>';
+  const ICONE_PAUSE =
+    '<svg class="i-pause" viewBox="0 0 24 24"><rect x="6" y="4.5" width="4" height="15" rx="1" fill="currentColor"/><rect x="14" y="4.5" width="4" height="15" rx="1" fill="currentColor"/></svg>';
 
   function render(s) {
     switch (s.tipo) {
       case "texto":
-        return `<div class="inner">
+        return `${s.fundo ? `<div class="bg-photo"><img src="${s.fundo}" alt="" /></div>` : '<div class="grad"></div>'}
+        <div class="inner">
           <p class="eyebrow reveal">${s.eyebrow || ""}</p>
           <h2 class="serif reveal">${fmt(s.titulo)}</h2>
           ${s.texto ? `<p class="body reveal">${fmt(s.texto)}</p>` : ""}
         </div>`;
       case "contador":
-        return `<div class="inner">
+        return `<div class="grad"></div>
+        <div class="inner">
           <p class="eyebrow reveal">${s.eyebrow || ""}</p>
           <div class="big-num reveal js-dias">0</div>
-          <p class="serif num-label reveal">dias</p>
-          <p class="ticker reveal"><span class="js-h">0</span> horas, <span class="js-m">0</span> minutos e <span class="js-s">0</span> segundos</p>
+          <p class="serif num-label reveal">dias juntos</p>
+          <p class="ticker reveal"><span class="js-h">0</span>h <span class="js-m">0</span>min <span class="js-s">0</span>s</p>
+          <div class="stats reveal">
+            <div><b class="js-semanas">0</b><span>semanas</span></div>
+            <div><b class="js-horas">0</b><span>horas</span></div>
+            <div><b class="js-minutos">0</b><span>minutos</span></div>
+            <div><b>1º</b><span>aniversário seu comigo</span></div>
+          </div>
           ${s.texto ? `<p class="body reveal">${fmt(s.texto)}</p>` : ""}
         </div>`;
       case "foto":
+        if (s.layout === "polaroid")
+          return `<div class="grad"></div>
+          <div class="inner">
+            <p class="eyebrow reveal">${s.eyebrow || ""}</p>
+            <div class="polaroid reveal">
+              <div class="tape"></div>
+              <img src="${s.src}" alt="" style="object-position:${s.posicao || "center"}" />
+              <span class="hand">${s.bilhete || ""}</span>
+            </div>
+            <p class="serif legenda reveal">${fmt(s.legenda)}</p>
+          </div>`;
         return `<div class="photo"><img src="${s.src}" alt="" style="object-position:${s.posicao || "center"}" /></div>
           <div class="shade"></div>
           <div class="caption">
             <p class="eyebrow reveal">${s.eyebrow || ""}</p>
             <p class="serif reveal">${fmt(s.legenda)}</p>
           </div>`;
+      case "top5":
+        return `<div class="grad"></div>
+        <div class="inner">
+          <p class="eyebrow reveal">${s.eyebrow || ""}</p>
+          <h2 class="serif reveal">${fmt(s.titulo)}</h2>
+          <ol class="top5">${s.itens
+            .map((t, i) => `<li class="reveal"><span>${String(i + 1).padStart(2, "0")}</span>${fmt(t)}</li>`)
+            .join("")}</ol>
+        </div>`;
       case "carta":
         return `<div class="letter-wrap"><div class="letter">
           <p class="eyebrow">${s.eyebrow || ""}</p>
+          ${s.foto ? `<div class="mini-polaroid"><div class="tape"></div><img src="${s.foto}" alt="" /></div>` : ""}
           <h2 class="serif">${fmt(s.titulo)}</h2>
-          <div class="letter-body">${s.texto.split(/\n\s*\n/).map((p) => `<p>${fmt(p.trim())}</p>`).join("")}</div>
-          <p class="sign serif">${CONFIG.assinatura}</p>
+          <div class="letter-body">${s.texto
+            .split(/\n\s*\n/)
+            .map((p) => `<p>${fmt(p.trim())}</p>`)
+            .join("")}</div>
+          <p class="sign hand">${CONFIG.assinatura}</p>
           <button class="btn-linha js-next">Continuar →</button>
         </div></div>`;
-      case "final": {
-        const n = fotos.length;
-        const imgs = fotos
-          .map((src, i) => {
-            const t = n > 1 ? i / (n - 1) - 0.5 : 0;
-            return `<img src="${src}" alt="" style="--r:${(t * 16).toFixed(1)}deg;--x:${(t * 30).toFixed(0)}px;animation-delay:${0.2 + i * 0.25}s" />`;
-          })
-          .join("");
-        return `<div class="stack">${imgs}</div>
-          <div class="inner">
+      case "final":
+        return `<div class="grad"></div>
+        <div class="inner">
+          <div>
+            <p class="eyebrow reveal">${s.eyebrow || ""}</p>
             <h2 class="serif reveal">${fmt(s.titulo)}</h2>
-            <p class="eyebrow data reveal">${fmt(s.texto)}</p>
-            <p class="assina reveal">com amor, ${CONFIG.assinatura}</p>
-            <div class="reveal"><button class="btn-linha js-replay">Ver de novo ↺</button></div>
-          </div>`;
-      }
+          </div>
+          <div class="vinyl-area reveal">
+            <div class="vinyl"><img src="${musica?.capa || ""}" alt="" /><div class="hole"></div></div>
+          </div>
+          <div>
+            <div class="player reveal">
+              <button class="play js-play" aria-label="Tocar música">${ICONE_PLAY}${ICONE_PAUSE}</button>
+              <div class="track">
+                <b>${musica?.titulo || ""}</b>
+                <small>${musica?.artista || ""}</small>
+                <div class="progress"><i class="js-progress"></i></div>
+              </div>
+            </div>
+            <div class="final-foot reveal">
+              <span class="hand">com amor, ${CONFIG.assinatura}</span>
+              <button class="btn-linha js-replay">Ver de novo ↺</button>
+            </div>
+          </div>
+        </div>`;
     }
     return "";
   }
@@ -126,8 +174,10 @@
     const bars = $("#bars");
     slides.forEach((s) => {
       const el = document.createElement("section");
-      el.className = `slide slide-${s.tipo}${s.tema ? " tema-" + s.tema : ""}`;
+      const tema = s.tipo === "final" ? "escuro" : s.tema;
+      el.className = `slide slide-${s.tipo}${s.layout ? " slide-" + s.layout : ""}${tema ? " tema-" + tema : ""}`;
       el.innerHTML = render(s);
+      $$(".reveal", el).forEach((r, i) => (r.style.animationDelay = 0.1 + i * 0.22 + "s"));
       stage.appendChild(el);
       const b = document.createElement("div");
       b.className = "bar";
@@ -136,20 +186,85 @@
     });
     slideEls = [...stage.children];
     barEls = [...bars.children].map((b) => b.firstChild);
-    stage.querySelectorAll(".js-next").forEach((b) => b.addEventListener("click", () => go(idx + 1)));
-    stage.querySelectorAll(".js-replay").forEach((b) => b.addEventListener("click", () => go(0)));
+    $$(".js-next", stage).forEach((b) => b.addEventListener("click", () => go(idx + 1)));
+    $$(".js-replay", stage).forEach((b) => b.addEventListener("click", () => go(0)));
+    $$(".js-play", stage).forEach((b) => b.addEventListener("click", alternarMusica));
     atualizarContador();
     setInterval(atualizarContador, 1000);
     ligarToques(stage);
   }
 
   function atualizarContador() {
-    const s = Math.max(0, Math.floor((Date.now() - beijo.getTime()) / 1000));
-    document.querySelectorAll(".js-dias").forEach((el) => (el.textContent = Math.floor(s / 86400)));
-    document.querySelectorAll(".js-h").forEach((el) => (el.textContent = Math.floor((s % 86400) / 3600)));
-    document.querySelectorAll(".js-m").forEach((el) => (el.textContent = Math.floor((s % 3600) / 60)));
-    document.querySelectorAll(".js-s").forEach((el) => (el.textContent = s % 60));
+    const s = segundosJuntos();
+    const set = (cls, v) => $$(cls).forEach((el) => (el.textContent = v));
+    set(".js-dias", Math.floor(s / 86400));
+    set(".js-h", Math.floor((s % 86400) / 3600));
+    set(".js-m", Math.floor((s % 3600) / 60));
+    set(".js-s", s % 60);
+    set(".js-semanas", milhar(Math.floor(s / 604800)));
+    set(".js-horas", milhar(Math.floor(s / 3600)));
+    set(".js-minutos", milhar(Math.floor(s / 60)));
   }
+
+  // ---------- música (YouTube) ----------
+  let player = null;
+  let playerPronto = false;
+  let querTocar = false;
+  let erroPlayer = false;
+  let checagem;
+
+  function carregarYouTube() {
+    if (!musica?.youtube) return;
+    window.onYouTubeIframeAPIReady = () => {
+      player = new YT.Player("yt", {
+        videoId: musica.youtube,
+        width: 240,
+        height: 135,
+        playerVars: { playsinline: 1, controls: 0, rel: 0, start: musica.inicio || 0 },
+        events: {
+          onReady: () => {
+            playerPronto = true;
+            if (querTocar) player.playVideo();
+          },
+          onStateChange: (e) => {
+            const tocando = e.data === YT.PlayerState.PLAYING;
+            document.body.classList.toggle("tocando", tocando);
+            if (tocando) {
+              clearTimeout(checagem);
+              $("#yt-wrap").classList.remove("visivel");
+            }
+          },
+          onError: () => (erroPlayer = true),
+        },
+      });
+    };
+    const tag = document.createElement("script");
+    tag.src = "https://www.youtube.com/iframe_api";
+    document.head.appendChild(tag);
+  }
+
+  function alternarMusica() {
+    if (erroPlayer || !musica?.youtube) {
+      window.open(`https://www.youtube.com/watch?v=${musica.youtube}`, "_blank");
+      return;
+    }
+    if (document.body.classList.contains("tocando")) {
+      player.pauseVideo();
+      return;
+    }
+    querTocar = true;
+    if (playerPronto) player.playVideo();
+    clearTimeout(checagem);
+    checagem = setTimeout(() => {
+      if (!document.body.classList.contains("tocando")) $("#yt-wrap").classList.add("visivel");
+    }, 2500);
+  }
+
+  setInterval(() => {
+    if (!playerPronto || !player.getDuration) return;
+    const d = player.getDuration();
+    if (d) $$(".js-progress").forEach((el) => (el.style.width = (player.getCurrentTime() / d) * 100 + "%"));
+  }, 500);
 
   // ---------- navegação ----------
   let idx = 0;
@@ -159,8 +274,9 @@
 
   function temaDe(s) {
     if (s.tipo === "carta") return "claro";
-    if (s.tipo === "foto" || s.tipo === "final") return "escuro";
-    return s.tema || "escuro";
+    if (s.tipo === "final") return "escuro";
+    if (s.tipo === "foto") return s.layout === "polaroid" ? "claro" : "escuro";
+    return s.tema === "rosa" ? "claro" : s.tema || "escuro";
   }
 
   function go(i) {
@@ -170,12 +286,10 @@
     acumulado = 0;
     inicio = performance.now();
     slideEls.forEach((el, k) => {
+      el.classList.remove("active");
       if (k === i) {
-        el.classList.remove("active");
         void el.offsetWidth;
         el.classList.add("active");
-      } else {
-        el.classList.remove("active");
       }
     });
     barEls.forEach((b, k) => (b.style.width = k < i ? "100%" : "0%"));
@@ -259,5 +373,7 @@
   }
 
   // pré-carrega as fotos
-  fotos.forEach((src) => (new Image().src = src));
+  [...new Set(slides.flatMap((s) => [s.src, s.fundo, s.foto]).concat(musica?.capa))]
+    .filter(Boolean)
+    .forEach((src) => (new Image().src = src));
 })();
